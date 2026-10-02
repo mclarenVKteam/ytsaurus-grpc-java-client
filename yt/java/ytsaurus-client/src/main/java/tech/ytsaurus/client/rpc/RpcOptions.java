@@ -94,6 +94,12 @@ public class RpcOptions {
     private boolean traceSampled = false;
     private boolean traceDebug = false;
 
+    private TransportType transportType = TransportType.BUS;
+    private String grpcProtocolVersion = "1.0";
+    private int grpcMaxInboundMessageSize = Integer.MAX_VALUE;
+    private int grpcMaxOutboundMessageSize = Integer.MAX_VALUE;
+    private Duration grpcIdleTimeout = Duration.ofSeconds(60);
+
     private DiscoveryMethod preferableDiscoveryMethod = DiscoveryMethod.RPC;
 
     /**
@@ -123,6 +129,11 @@ public class RpcOptions {
         this.traceEnabled = options.getTrace();
         this.traceSampled = options.getTraceSampled();
         this.traceDebug = options.getTraceDebug();
+        this.transportType = options.getTransportType();
+        this.grpcProtocolVersion = options.getGrpcProtocolVersion();
+        this.grpcMaxInboundMessageSize = options.getGrpcMaxInboundMessageSize();
+        this.grpcMaxOutboundMessageSize = options.getGrpcMaxOutboundMessageSize();
+        this.grpcIdleTimeout = options.getGrpcIdleTimeout();
         this.preferableDiscoveryMethod = options.getPreferableDiscoveryMethod();
         this.rpcProxySelector = options.getRpcProxySelector();
     }
@@ -154,6 +165,82 @@ public class RpcOptions {
         return this;
     }
 
+    /**
+     * Returns the transport type used to communicate with RPC proxies.
+     * Defaults to {@link TransportType#BUS}.
+     */
+    public TransportType getTransportType() {
+        return transportType;
+    }
+
+    /**
+     * Sets the transport type used to communicate with RPC proxies.
+     */
+    public RpcOptions setTransportType(TransportType transportType) {
+        this.transportType = transportType;
+        return this;
+    }
+
+    /**
+     * Returns the gRPC protocol version sent in request metadata.
+     */
+    public String getGrpcProtocolVersion() {
+        return grpcProtocolVersion;
+    }
+
+    /**
+     * Sets the gRPC protocol version sent in request metadata.
+     */
+    public RpcOptions setGrpcProtocolVersion(String grpcProtocolVersion) {
+        this.grpcProtocolVersion = grpcProtocolVersion;
+        return this;
+    }
+
+    /**
+     * Returns the maximum inbound gRPC message size in bytes.
+     */
+    public int getGrpcMaxInboundMessageSize() {
+        return grpcMaxInboundMessageSize;
+    }
+
+    /**
+     * Sets the maximum inbound gRPC message size in bytes.
+     */
+    public RpcOptions setGrpcMaxInboundMessageSize(int grpcMaxInboundMessageSize) {
+        this.grpcMaxInboundMessageSize = grpcMaxInboundMessageSize;
+        return this;
+    }
+
+    /**
+     * Returns the maximum outbound gRPC message size in bytes.
+     */
+    public int getGrpcMaxOutboundMessageSize() {
+        return grpcMaxOutboundMessageSize;
+    }
+
+    /**
+     * Sets the maximum outbound gRPC message size in bytes.
+     */
+    public RpcOptions setGrpcMaxOutboundMessageSize(int grpcMaxOutboundMessageSize) {
+        this.grpcMaxOutboundMessageSize = grpcMaxOutboundMessageSize;
+        return this;
+    }
+
+    /**
+     * Returns the timeout after which an idle gRPC channel is closed.
+     */
+    public Duration getGrpcIdleTimeout() {
+        return grpcIdleTimeout;
+    }
+
+    /**
+     * Sets the timeout after which an idle gRPC channel is closed.
+     */
+    public RpcOptions setGrpcIdleTimeout(Duration grpcIdleTimeout) {
+        this.grpcIdleTimeout = grpcIdleTimeout;
+        return this;
+    }
+
     @Deprecated
     public Duration getDefaultTimeout() {
         return getGlobalTimeout();
@@ -170,6 +257,7 @@ public class RpcOptions {
 
     /**
      * If notifications about message delivery are needed.
+     *
      * @see tech.ytsaurus.client.bus.BusDeliveryTracking
      */
     public RpcOptions setDefaultRequestAck(boolean defaultRequestAck) {
@@ -187,6 +275,7 @@ public class RpcOptions {
     /**
      * Allows affecting requests and responses for testing purposes.
      * For example, to emulate errors from the server and to get sent requests in tests.
+     *
      * @return self
      */
     public RpcOptions setTestingOptions(TestingOptions testingOptions) {
@@ -235,7 +324,8 @@ public class RpcOptions {
 
 
     /**
-     * Fails request after this timeout.
+     * Default request timeout; can be overridden per request.
+     *
      * @return self
      */
     public RpcOptions setGlobalTimeout(Duration globalTimeout) {
@@ -252,6 +342,7 @@ public class RpcOptions {
 
     /**
      * How often new rpc proxies will be discovered.
+     *
      * @return self
      */
     public RpcOptions setProxyUpdateTimeout(Duration timeout) {
@@ -305,6 +396,7 @@ public class RpcOptions {
 
     /**
      * Allow setting custom factory of retry policies.
+     *
      * @return self
      */
     public RpcOptions setRetryPolicyFactory(Supplier<RetryPolicy> retryPolicyFactory) {
@@ -314,6 +406,7 @@ public class RpcOptions {
 
     /**
      * Metrics holder, calculate request metrics
+     *
      * @see BalancingResponseHandlerMetricsHolderImpl
      */
     public RpcOptions setResponseMetricsHolder(BalancingResponseHandlerMetricsHolder responseMetricsHolder) {
@@ -337,6 +430,7 @@ public class RpcOptions {
 
     /**
      * Set maximum amount of opened rpc-proxy connections.
+     *
      * @return self
      */
     public RpcOptions setChannelPoolSize(int channelPoolSize) {

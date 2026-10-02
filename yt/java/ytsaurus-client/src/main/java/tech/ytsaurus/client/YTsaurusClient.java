@@ -114,18 +114,12 @@ public class YTsaurusClient extends CompoundClientImpl implements BaseYTsaurusCl
         OutageController outageController =
                 builder.builder.config.getRpcOptions().getTestingOptions().getOutageController();
 
-        final RpcClientFactory rpcClientFactory =
-                outageController != null
-                        ? new OutageRpcClientFactoryImpl(
-                        busConnector,
-                        builder.auth,
-                        builder.builder.compression,
-                        outageController)
-                        : new RpcClientFactoryImpl(
-                        busConnector,
-                        builder.auth,
-                        builder.builder.compression,
-                        builder.builder.config.getRpcOptions().getRpcClientListener());
+        final RpcClientFactory rpcClientFactory = createRpcClientFactory(
+                builder.busConnector,
+                builder.auth,
+                builder.builder.compression,
+                builder.builder.config,
+                outageController);
 
         this.poolProvider = new ClientPoolProvider(
                 busConnector,
@@ -136,6 +130,7 @@ public class YTsaurusClient extends CompoundClientImpl implements BaseYTsaurusCl
                 builder.builder.config.getUseTLS(),
                 builder.builder.config.getTvmOnly(),
                 builder.builder.config.getIgnoreBalancers(),
+                builder.builder.config.getDisableProxyDiscovery(),
                 builder.auth,
                 rpcClientFactory,
                 builder.builder.config.getRpcOptions(),
@@ -267,6 +262,45 @@ public class YTsaurusClient extends CompoundClientImpl implements BaseYTsaurusCl
         );
     }
 
+    /**
+     * Creates the {@link RpcClientFactory} matching the configured transport type.
+     *
+     * <p>Uses a gRPC factory when {@link RpcOptions#getTransportType()} is
+     * {@link tech.ytsaurus.client.rpc.TransportType#GRPC}, otherwise falls back to the bus factory.
+     */
+    private static RpcClientFactory createRpcClientFactory(
+            BusConnector busConnector,
+            YTsaurusClientAuth auth,
+            RpcCompression compression,
+            YTsaurusClientConfig config,
+            OutageController outageController
+    ) {
+        if (config.getRpcOptions().getTransportType() == tech.ytsaurus.client.rpc.TransportType.GRPC) {
+            if (config.getTvmOnly()) {
+                throw new IllegalArgumentException(
+                        "gRPC client does not support TVM-only endpoint: there is no TVM-only gRPC proxy port");
+            }
+            return new GrpcClientFactoryImpl(
+                    auth,
+                    config.getRpcOptions(),
+                    config.getUseTLS(),
+                    null);
+        }
+
+        if (outageController != null) {
+            return new OutageRpcClientFactoryImpl(
+                    busConnector,
+                    auth,
+                    compression,
+                    outageController);
+        }
+        return new RpcClientFactoryImpl(
+                busConnector,
+                auth,
+                compression,
+                config.getRpcOptions().getRpcClientListener());
+    }
+
     @NonNullApi
     static class ClientPoolProvider implements AutoCloseable {
         final MultiDcClientPool multiDcClientPool;
@@ -286,6 +320,7 @@ public class YTsaurusClient extends CompoundClientImpl implements BaseYTsaurusCl
                 boolean useTLS,
                 boolean tvmOnly,
                 boolean ignoreBalancers,
+                boolean disableProxyDiscovery,
                 YTsaurusClientAuth auth,
                 RpcClientFactory rpcClientFactory,
                 RpcOptions options,
@@ -300,8 +335,44 @@ public class YTsaurusClient extends CompoundClientImpl implements BaseYTsaurusCl
             final Random random = new Random();
 
             for (YTsaurusCluster curCluster : clusters) {
-                // Find out if we use http or rpc discovery.
-                if (curCluster.balancerFqdn != null && !curCluster.balancerFqdn.isEmpty() && (
+                if (disableProxyDiscovery) {
+                    final List<HostPort> initialProxyList;
+                    if (curCluster.addresses != null && !curCluster.addresses.isEmpty()) {
+                        initialProxyList =
+                                curCluster.addresses.stream().map(HostPort::parse).collect(Collectors.toList());
+                    } else if (curCluster.balancerFqdn != null && !curCluster.balancerFqdn.isEmpty()) {
+                        if (curCluster.port == null) {
+                            throw new IllegalArgumentException(String.format(
+                                    "Cluster %s has disable-proxy-discovery enabled and a balancer FQDN but no port",
+                                    curCluster.getName()));
+                        }
+                        initialProxyList = List.of(
+                                HostPort.parse(curCluster.balancerFqdn + ":" + curCluster.port));
+                    } else {
+                        throw new IllegalArgumentException(String.format(
+                                "Cluster %s has disable-proxy-discovery enabled but neither proxy addresses "
+                                        + "nor a balancer FQDN are specified",
+                                curCluster.getName()));
+                    }
+                    dataCenterList.add(
+                            ClientPoolService.staticBuilder()
+                                    .setDataCenterName(curCluster.getName())
+                                    .setInitialProxyList(initialProxyList)
+                                    .setRole(proxyRole)
+                                    .setProxyNetworkName(proxyNetworkName)
+                                    .setUseTLS(useTLS || curCluster.useTLS)
+                                    .setOptions(options)
+                                    .setClientFactory(rpcClientFactory)
+                                    .setEventLoop(eventLoopGroup)
+                                    .setRandom(random)
+                                    .build()
+                    );
+                } else if (options.getTransportType() == tech.ytsaurus.client.rpc.TransportType.GRPC) {
+                    throw new IllegalArgumentException(
+                            "gRPC transport requires disable-proxy-discovery to be enabled; "
+                                    + "dynamic gRPC proxy discovery is not supported");
+
+                } else if (curCluster.balancerFqdn != null && !curCluster.balancerFqdn.isEmpty() && (
                         options.getPreferableDiscoveryMethod() == DiscoveryMethod.HTTP
                                 || curCluster.addresses == null
                                 || curCluster.addresses.isEmpty())

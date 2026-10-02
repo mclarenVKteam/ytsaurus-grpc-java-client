@@ -41,6 +41,7 @@ public class YTsaurusClientConfig {
     private final boolean useTLS;
     private final boolean tvmOnly;
     private final boolean ignoreBalancers;
+    private final boolean disableProxyDiscovery;
     @Nullable
     private final RequestMiddleware requestMiddleware;
 
@@ -67,6 +68,7 @@ public class YTsaurusClientConfig {
         this.useTLS = builder.useTLS;
         this.tvmOnly = builder.tvmOnly;
         this.ignoreBalancers = builder.ignoreBalancers;
+        this.disableProxyDiscovery = builder.disableProxyDiscovery;
         this.requestMiddleware = builder.requestMiddleware;
     }
 
@@ -90,6 +92,7 @@ public class YTsaurusClientConfig {
                 .setUseTLS(useTLS)
                 .setTvmOnly(tvmOnly)
                 .setIgnoreBalancers(ignoreBalancers)
+                .setDisableProxyDiscovery(disableProxyDiscovery)
                 .setRequestMiddleware(requestMiddleware);
     }
 
@@ -147,6 +150,14 @@ public class YTsaurusClientConfig {
 
     public boolean getIgnoreBalancers() {
         return ignoreBalancers;
+    }
+
+    /**
+     * If true, proxy discovery is disabled and the addresses provided in {@link YTsaurusCluster}
+     * are used directly as RPC proxy endpoints.
+     */
+    public boolean getDisableProxyDiscovery() {
+        return disableProxyDiscovery;
     }
 
     @Nullable
@@ -209,6 +220,7 @@ public class YTsaurusClientConfig {
         private boolean useTLS = false;
         private boolean tvmOnly = false;
         private boolean ignoreBalancers = false;
+        private boolean disableProxyDiscovery = false;
         @Nullable
         private RequestMiddleware requestMiddleware;
 
@@ -304,6 +316,15 @@ public class YTsaurusClientConfig {
          */
         public Builder setIgnoreBalancers(boolean ignoreBalancers) {
             this.ignoreBalancers = ignoreBalancers;
+            return this;
+        }
+
+        /**
+         * If true, proxy discovery is disabled and the addresses provided in {@link YTsaurusCluster}
+         * are used directly as RPC proxy endpoints.
+         */
+        public Builder setDisableProxyDiscovery(boolean disableProxyDiscovery) {
+            this.disableProxyDiscovery = disableProxyDiscovery;
             return this;
         }
 

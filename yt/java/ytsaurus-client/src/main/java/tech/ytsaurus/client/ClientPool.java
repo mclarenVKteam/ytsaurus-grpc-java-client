@@ -323,6 +323,27 @@ class ClientPoolService extends ClientPool implements AutoCloseable {
         updateClients(rpcBuilder.initialProxyList);
     }
 
+    private ClientPoolService(StaticBuilder staticBuilder) {
+        super(
+                Objects.requireNonNull(staticBuilder.dataCenterName),
+                Objects.requireNonNull(staticBuilder.options).getChannelPoolSize(),
+                new SelfCheckingClientFactoryImpl(
+                        Objects.requireNonNull(staticBuilder.clientFactory),
+                        staticBuilder.options),
+                Objects.requireNonNull(staticBuilder.eventLoop),
+                Objects.requireNonNull(staticBuilder.random),
+                Objects.requireNonNull(staticBuilder.options.getRpcProxySelector())
+        );
+
+        List<HostPort> initialProxyList = Objects.requireNonNull(staticBuilder.initialProxyList);
+        proxyGetter = new StaticProxyGetter(initialProxyList);
+
+        executorService = staticBuilder.eventLoop;
+        updatePeriodMs = staticBuilder.options.getProxyUpdateTimeout().toMillis();
+
+        updateClients(initialProxyList);
+    }
+
     /**
      * Service is used for fetching relevant addresses of discovery servers.
      */
@@ -356,6 +377,14 @@ class ClientPoolService extends ClientPool implements AutoCloseable {
 
     static RpcBuilder rpcBuilder() {
         return new RpcBuilder();
+    }
+
+    /**
+     * Creates a builder for a pool backed by a fixed list of proxies.
+     * No proxy discovery is performed; the provided addresses are used as-is.
+     */
+    static StaticBuilder staticBuilder() {
+        return new StaticBuilder();
     }
 
     static DiscoveryClientPoolBuilder discoveryClientPoolBuilder() {
@@ -562,6 +591,23 @@ class ClientPoolService extends ClientPool implements AutoCloseable {
         List<HostPort> initialProxyList;
 
         RpcBuilder setInitialProxyList(List<HostPort> initialProxyList) {
+            this.initialProxyList = initialProxyList;
+            return this;
+        }
+
+        ClientPoolService build() {
+            return new ClientPoolService(this);
+        }
+    }
+
+    /**
+     * Builder for a pool that uses a fixed list of RPC proxies without discovery.
+     */
+    static class StaticBuilder extends BaseBuilder<StaticBuilder> {
+        @Nullable
+        List<HostPort> initialProxyList;
+
+        StaticBuilder setInitialProxyList(List<HostPort> initialProxyList) {
             this.initialProxyList = initialProxyList;
             return this;
         }
@@ -1113,5 +1159,23 @@ class RpcProxyGetter implements ProxyGetter {
 
         resultFuture.whenComplete((result, error) -> releaseClientFuture.complete(null));
         return resultFuture;
+    }
+}
+
+/**
+ * Returns a fixed list of proxies without any discovery.
+ */
+@NonNullFields
+@NonNullApi
+class StaticProxyGetter implements ProxyGetter {
+    private final List<HostPort> proxies;
+
+    StaticProxyGetter(List<HostPort> proxies) {
+        this.proxies = Collections.unmodifiableList(new ArrayList<>(proxies));
+    }
+
+    @Override
+    public CompletableFuture<List<HostPort>> getProxies() {
+        return CompletableFuture.completedFuture(proxies);
     }
 }

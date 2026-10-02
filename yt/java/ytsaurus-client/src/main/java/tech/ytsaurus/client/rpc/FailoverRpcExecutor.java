@@ -10,13 +10,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tech.ytsaurus.client.RetryPolicy;
 import tech.ytsaurus.client.misc.ScheduledSerializedExecutorService;
 import tech.ytsaurus.core.GUID;
+import tech.ytsaurus.core.common.YTsaurusError;
+import tech.ytsaurus.core.common.YTsaurusErrorCode;
 import tech.ytsaurus.core.utils.ExceptionUtils;
+import tech.ytsaurus.TError;
 import tech.ytsaurus.rpc.TRequestHeader;
 import tech.ytsaurus.rpc.TResponseHeader;
 
@@ -160,8 +162,12 @@ class FailoverRpcExecutor {
 
     private void onGlobalTimeout() {
         result.completeExceptionally(
-                new TimeoutException(
-                        String.format("Request has timed out; OriginalRequestId: %s", originalRequestId))
+                new YTsaurusError(
+                        TError.newBuilder()
+                                .setCode(YTsaurusErrorCode.Timeout.getCode())
+                                .setMessage(String.format("Request has timed out; OriginalRequestId: %s", originalRequestId))
+                                .build()
+                )
         );
     }
 
